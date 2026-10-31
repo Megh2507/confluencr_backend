@@ -120,16 +120,30 @@ It checks the four success criteria:
 4. **Performance and reliability:** it reports p50/p95/max webhook latency for a burst of concurrent
    webhooks, then confirms every one of them gets processed.
 
-Sample output from a local run:
+### Results against the live deployment
 
-```
-2. Single transaction + 3. duplicate prevention
-   15 webhooks for txn_smoke_57043c68: all 202, 1 new / 14 duplicate
-   immediately: PROCESSING, processed_at=None
-   ...
-   processed 30.0s after receipt
-   all 200 processed, none lost
-```
+These are from the free Render instance (0.1 CPU), measured from India. Server time is the
+`X-Response-Time-Ms` header; client time adds the network round trip to Ohio.
+
+| Check | Result |
+|---|---|
+| Health check | `200 {"status": "HEALTHY", ...}`, about 11ms on the server |
+| Single transaction | `PROCESSING` immediately, `PROCESSED` **30.0s** after receipt |
+| Duplicates (15 copies, 5 sequential + 10 concurrent) | all `202`; 1 new, 14 duplicate; one row, processed once |
+| Steady 10 webhooks/s, about 150 transactions processing | server p50 **11.6ms**, p95 21.9ms, max 162.8ms |
+| Steady 25 webhooks/s, 200 webhooks | server p50 **16.1ms**, p95 109.5ms, max 196.0ms |
+| Reliability | every load-test transaction processed, none lost |
+
+Background processing doesn't slow the webhook endpoint. While hundreds of 30-second jobs run,
+steady traffic is answered in milliseconds.
+
+The one case that exceeds 500ms on the free plan is a burst of **100 webhooks sent at the same
+instant**: server p50 706ms, max 1308ms. All 100 were still accepted and processed. With only 0.1
+CPU, those 100 requests take turns on the CPU, so each waits for the others. This is a hosting
+limit rather than a design one. On a laptop CPU, an even larger burst of 200 concurrent webhooks
+peaked at 452.6ms server time, and all 200 were processed. A larger instance, or a second
+instance sharing the database, would absorb the burst; the lease-based claiming makes running
+several instances safe.
 
 ---
 
@@ -141,6 +155,15 @@ on Render, Railway, Fly.io, Cloud Run with always-on CPU, or any container host.
 1. Create a free Postgres database on [Neon](https://neon.tech) and copy its connection string.
 2. On [Render](https://render.com), choose **New → Blueprint** and select this repository.
 3. Set `DATABASE_URL` to the Neon connection string. The table is created on startup.
+
+The live instance runs on Render's free plan in Ohio, next to the Neon database in AWS us-east-2,
+so database round trips take about 1ms. Two free-plan limits matter for testing:
+
+- **Sleep after 15 minutes idle.** The first request to a sleeping service takes 30–50s while it
+  wakes. Send one request (for example `GET /`) before measuring latency. Nothing is lost by
+  sleeping: pending transactions are stored in Postgres and picked up again on wake-up.
+- **0.1 CPU.** Steady traffic is answered in milliseconds, but very large simultaneous bursts
+  queue for CPU. A paid instance (Render Starter, 0.5 CPU) removes this ceiling without code changes.
 
 ---
 
