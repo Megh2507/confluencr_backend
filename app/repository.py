@@ -32,7 +32,11 @@ class TransactionRepository:
 
     def __init__(self, engine: AsyncEngine):
         self._engine = engine
-        self._sessions = async_sessionmaker(engine, expire_on_commit=False)
+        # Every write is a single self-contained statement, so autocommit is safe and saves
+        # the BEGIN/COMMIT round trips that would otherwise dominate webhook latency.
+        self._sessions = async_sessionmaker(
+            engine.execution_options(isolation_level="AUTOCOMMIT"), expire_on_commit=False
+        )
         self._insert = pg_insert if engine.dialect.name == "postgresql" else sqlite_insert
 
     async def ping(self) -> None:

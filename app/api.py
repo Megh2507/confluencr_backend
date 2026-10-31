@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -16,7 +16,7 @@ router = APIRouter()
 async def health(request: Request):
     healthy = True
     try:
-        await asyncio.wait_for(request.app.state.repository.ping(), timeout=2)
+        await asyncio.wait_for(request.app.state.repository.ping(), timeout=5)
     except Exception:
         logger.warning("Health check: database unreachable", exc_info=True)
         healthy = False
