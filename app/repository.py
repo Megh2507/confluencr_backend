@@ -81,11 +81,11 @@ class TransactionRepository:
         async with self._sessions() as session:
             return list((await session.execute(stmt)).scalars())
 
-    async def claim(self, transaction_id: str, lease_seconds: float) -> str | None:
+    async def claim(self, transaction_id: str, lease_seconds: float) -> Transaction | None:
         """Atomically take ownership of a pending transaction.
 
-        Returns a lease token, or None if the transaction is already processed, leased by
-        another worker, or waiting for a retry.
+        Returns the leased transaction (its `lease_token` identifies this claim), or None if
+        it is already processed, leased by another worker, or waiting for a retry.
         """
         now = utcnow()
         token = str(uuid.uuid4())
@@ -98,12 +98,12 @@ class TransactionRepository:
                 attempts=Transaction.attempts + 1,
                 updated_at=now,
             )
-            .returning(Transaction.transaction_id)
+            .returning(Transaction)
         )
         async with self._sessions() as session:
             claimed = (await session.execute(stmt)).scalar_one_or_none()
             await session.commit()
-        return token if claimed is not None else None
+        return claimed
 
     async def complete(self, transaction_id: str, token: str) -> bool:
         """Mark a leased transaction PROCESSED. Returns False if the lease was lost."""

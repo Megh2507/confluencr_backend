@@ -105,12 +105,12 @@ class TransactionProcessor:
             self._scheduled.discard(transaction_id)
 
     async def _process(self, transaction_id: str) -> None:
-        token = await self._repo.claim(transaction_id, self._lease_seconds)
-        if token is None:
+        transaction = await self._repo.claim(transaction_id, self._lease_seconds)
+        if transaction is None:
             return  # already processed, or owned by another worker
+        token = transaction.lease_token
         self._leases[transaction_id] = token
         try:
-            transaction = await self._repo.get(transaction_id)
             logger.info("Processing transaction %s (attempt %d)", transaction_id, transaction.attempts)
             try:
                 await self._handler(transaction)

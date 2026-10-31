@@ -34,8 +34,11 @@ def normalize_database_url(raw_url: str) -> tuple[str, dict[str, Any]]:
 
 def create_engine(raw_url: str) -> AsyncEngine:
     url, connect_args = normalize_database_url(raw_url)
-    options: dict[str, Any] = {"connect_args": connect_args, "pool_pre_ping": True}
+    options: dict[str, Any] = {"connect_args": connect_args}
     if url.startswith("postgresql"):
+        # No pool_pre_ping: it doubles the queries per operation. Connections are recycled
+        # instead, and a dropped connection invalidates the pool and surfaces as an error
+        # that ingest and the processor already retry.
         options.update(pool_size=10, max_overflow=20, pool_recycle=300)
     return create_async_engine(url, **options)
 

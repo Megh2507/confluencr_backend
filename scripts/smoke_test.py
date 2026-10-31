@@ -1,4 +1,4 @@
-"""End-to-end check of a running deployment against the assessment's success criteria.
+﻿"""End-to-end check of a running deployment against the assessment's success criteria.
 
     python scripts/smoke_test.py https://your-service.onrender.com
     python scripts/smoke_test.py http://localhost:8000 --load 200
@@ -8,6 +8,7 @@ webhook latency under load, and that no load-test transaction is lost.
 """
 import argparse
 import asyncio
+import ssl
 import statistics
 import time
 import uuid
@@ -49,7 +50,7 @@ async def wait_until_processed(client: httpx.AsyncClient, transaction_id: str, t
 
 async def main(base_url: str, load: int) -> None:
     run = uuid.uuid4().hex[:8]
-    async with httpx.AsyncClient(base_url=base_url, timeout=30) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30, verify=ssl.create_default_context()) as client:
         print("1. Health check")
         health = await client.get("/")
         print(f"   {health.status_code} {health.json()}")
