@@ -2,7 +2,8 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api import router
 from app.config import Settings, get_settings
@@ -12,12 +13,37 @@ from app.repository import TransactionRepository
 from app.worker import TransactionHandler, TransactionProcessor
 
 
+class ResponseTimeMiddleware:
+    """Adds an X-Response-Time-Ms header. Plain ASGI rather than @app.middleware("http"),
+    whose BaseHTTPMiddleware machinery costs noticeable CPU per request on small instances."""
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = time.perf_counter()
+
+        async def send_with_timing(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                elapsed = f"{(time.perf_counter() - started) * 1000:.1f}".encode()
+                message = {**message, "headers": [*message.get("headers", []), (b"x-response-time-ms", elapsed)]}
+            await send(message)
+
+        await self.app(scope, receive, send_with_timing)
+
+
 def create_app(settings: Settings | None = None, handler: TransactionHandler | None = None) -> FastAPI:
     settings = settings or get_settings()
     logging.basicConfig(
         level=settings.log_level.upper(),
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
+    # One access-log line per request is pure overhead here: the app already logs every
+    # transaction it receives and processes.
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -44,13 +70,7 @@ def create_app(settings: Settings | None = None, handler: TransactionHandler | N
         lifespan=lifespan,
     )
 
-    @app.middleware("http")
-    async def response_time_header(request: Request, call_next):
-        started = time.perf_counter()
-        response = await call_next(request)
-        response.headers["X-Response-Time-Ms"] = f"{(time.perf_counter() - started) * 1000:.1f}"
-        return response
-
+    app.add_middleware(ResponseTimeMiddleware)
     app.include_router(router)
     return app
 

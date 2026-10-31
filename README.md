@@ -4,7 +4,7 @@ A FastAPI service that receives transaction webhooks from payment processors (e.
 acknowledges them immediately with `202 Accepted`, and processes each transaction **exactly once**
 in the background (with a simulated 30-second external call), storing the result in Postgres.
 
-**Live API:** `<DEPLOYED_URL>` · interactive docs at `<DEPLOYED_URL>/docs`
+**Live API:** `https://transaction-webhook-service-b1x1.onrender.com` · interactive docs at `https://transaction-webhook-service-b1x1.onrender.com/docs`
 
 ---
 
@@ -109,7 +109,7 @@ with a shortened processing delay and cover:
 
 ```bash
 python scripts/smoke_test.py http://localhost:8000
-python scripts/smoke_test.py <DEPLOYED_URL> --load 100
+python scripts/smoke_test.py https://transaction-webhook-service-b1x1.onrender.com --load 100
 ```
 
 It checks the four success criteria:

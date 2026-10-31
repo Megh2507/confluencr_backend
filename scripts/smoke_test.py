@@ -1,4 +1,4 @@
-﻿"""End-to-end check of a running deployment against the assessment's success criteria.
+"""End-to-end check of a running deployment against the assessment's success criteria.
 
     python scripts/smoke_test.py https://your-service.onrender.com
     python scripts/smoke_test.py http://localhost:8000 --load 200
